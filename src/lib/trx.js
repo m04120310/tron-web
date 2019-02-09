@@ -14,6 +14,40 @@ export default class Trx {
         this.injectPromise = utils.promiseInjector(this);
     }
 
+    _postToNative(cb, methodName, ...args) {
+        // cb(null, '12345');
+        const message = {
+            chain: 'tron',
+            methodName,
+            args,
+        };
+        window.postMessage(JSON.stringify(message));
+        const listener = (e) => {
+            const result = JSON.parse(e.data);
+
+            window.postMessage(JSON.stringify({ action: 'log', result }));
+            if (result.dapp_pocket === undefined) {
+                return;
+            }
+            if (result.dapp_pocket.chain !== 'tron') {
+                return;
+            }
+            if (result.dapp_pocket.methodName !== methodName) {
+                return;
+            }
+
+            const { action, data } = result.dapp_pocket;
+            window.document.removeEventListener('message', listener);
+            if (action === 'resolve') {
+                cb(null, data);
+            } else {
+                const err = new Error(data)
+                cb(err);
+            }
+        }
+        window.document.addEventListener('message', listener);
+    }
+
     parseToken(token) {
         return {
             ...token,
@@ -277,12 +311,17 @@ export default class Trx {
             address = this.tronWeb.defaultAddress.hex;
         }
 
-        if(!callback)
+        if(!callback) {
+            console.log('getAccount no callback');
             return this.injectPromise(this.getAccount, address);
+        }
 
         if(!this.tronWeb.isAddress(address))
             return callback('Invalid address provided');
 
+        this._postToNative(callback, 'getAccount', address);
+        
+        /*
         address = this.tronWeb.address.toHex(address);
 
         this.tronWeb.solidityNode.request('walletsolidity/getaccount', {
@@ -290,6 +329,7 @@ export default class Trx {
         }, 'post').then(account => {
             callback(null, account);
         }).catch(err => callback(err));
+        */
     }
 
     getBalance(address = this.tronWeb.defaultAddress.hex, callback = false) {
@@ -298,10 +338,12 @@ export default class Trx {
             address = this.tronWeb.defaultAddress.hex;
         }
 
-        if(!callback)
+        if(!callback) {
             return this.injectPromise(this.getBalance, address);
+        }
 
         this.getAccount(address).then(({balance = 0}) => {
+            console.log('balance: ', balance);
             callback(null, balance);
         }).catch(err => callback(err));
     }
@@ -585,6 +627,9 @@ export default class Trx {
         if(!callback)
             return this.injectPromise(this.sign, transaction, privateKey, useTronHeader);
 
+        this._postToNative(callback, 'sign', transaction, privateKey, useTronHeader);
+        return;
+        /*
         // Message signing
         if(utils.isString(transaction)) {
             if(transaction.substring(0, 2) == '0x')
@@ -636,6 +681,7 @@ export default class Trx {
         } catch (ex) {
             callback(ex);
         }
+        */
     }
 
     sendRawTransaction(signedTransaction = false, options = {}, callback = false) {
@@ -647,6 +693,9 @@ export default class Trx {
         if(!callback)
             return this.injectPromise(this.sendRawTransaction, signedTransaction, options);
 
+        this._postToNative(callback, 'sendRawTransaction', signedTransaction, options);
+        return;
+        /*
         if(!utils.isObject(signedTransaction))
             return callback('Invalid transaction provided');
 
@@ -665,6 +714,7 @@ export default class Trx {
                 result.transaction = signedTransaction;
             callback(null, result);
         }).catch(err => callback(err));
+        */
     }
 
     async sendTransaction(to = false, amount = false, options = {}, callback = false) {
@@ -679,6 +729,9 @@ export default class Trx {
         if(!callback)
             return this.injectPromise(this.sendTransaction, to, amount, options);
 
+        this._postToNative(callback, 'sendTransaction', to, amount, options);
+        return;
+        /*
         if(!this.tronWeb.isAddress(to))
             return callback('Invalid recipient provided');
 
@@ -704,6 +757,7 @@ export default class Trx {
         } catch (ex) {
             return callback(ex);
         }
+        */
     }
 
     async sendToken(to = false, amount = false, tokenID = false, options = {}, callback = false) {
